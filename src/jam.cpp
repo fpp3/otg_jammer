@@ -7,6 +7,16 @@ typedef struct {
   rf24_pa_dbm_e pa_level;
 } __radio_t;
 
+typedef enum {
+  JAMMING_IDLE = 0,
+  JAMMING_BLUETOOTH = 1,
+  JAMMING_DRONE = 2,
+  JAMMING_BLE = 3,
+  JAMMING_WIFI = 4,
+  JAMMING_ZIGBEE = 5,
+  JAMMING_MISC = 6
+} jam_mode_e;
+
 static void __init_radios();
 static void __deinit_radios(bool stopConstCarrier);
 static void __hspi_init();
@@ -16,9 +26,9 @@ static SPIClass *__hp = nullptr;
 static uint8_t __nrf24_count; // Define the number of NRF24 radios
 static __radio_t *__radios = nullptr;
 static bool __constCarrier = false;
-static jam_mode_t __jam = JAMMING_IDLE;
+static jam_mode_e __jam = JAMMING_IDLE;
 static bool __is_initialized = false;
-static jam_tx_mode_t __mode = JAM_TX_STANDALONE;
+static jam_tx_mode_e __mode = JAM_TX_STANDALONE;
 
 static const uint8_t bluetooth_channels[] PROGMEM = {32, 34, 46, 48, 50, 52, 0,  1,  2,  4, 6,
                                                      8,  22, 24, 26, 28, 30, 74, 76, 78, 80};
@@ -75,25 +85,25 @@ void __hspi_deinit() {
 
 // Global functions. To be used by anyone including jam.h
 
-bool load_radios(nrf24_pins_t *pins_array, uint8_t count) {
+bool load_radios(radio_config_s *radios_config, uint8_t count) {
   if (__radios != nullptr) {
     return false; // Already loaded
   }
   __nrf24_count = count;
   __radios = new __radio_t[__nrf24_count];
   for (int radio_i = 0; radio_i < __nrf24_count; radio_i++) {
-    __radios[radio_i].ce_pin = pins_array[radio_i].ce_pin;
-    __radios[radio_i].csn_pin = pins_array[radio_i].csn_pin;
-    if (pins_array[radio_i].pa_level > RF24_PA_MAX) {
+    __radios[radio_i].ce_pin = radios_config[radio_i].ce_pin;
+    __radios[radio_i].csn_pin = radios_config[radio_i].csn_pin;
+    if (radios_config[radio_i].pa_level > RF24_PA_MAX) {
       return false; // Invalid PA level
     }
-    __radios[radio_i].pa_level = pins_array[radio_i].pa_level;
+    __radios[radio_i].pa_level = radios_config[radio_i].pa_level;
     __radios[radio_i].radio = nullptr;
   }
   return true;
 }
 
-void set_jam_tx_mode(jam_tx_mode_t mode) { __mode = mode; }
+void set_jam_tx_mode(jam_tx_mode_e mode) { __mode = mode; }
 
 void jam_start() {
   if (!__is_initialized) {
@@ -243,7 +253,7 @@ void ble_jam() {
   }
 }
 
-void wifi_jam(int8_t channel = -1) {
+void wifi_jam(int8_t channel) {
   if (__jam == JAMMING_IDLE) {
     jam_start();
     __constCarrier = false;
